@@ -32,7 +32,13 @@ jobs:
         targets: ${{ matrix.target }}
         
     - name: Install Tauri CLI
-      run: npm install -g @tauri-apps/cli@latest
+      run: |
+        echo "Installing Tauri CLI via cargo..."
+        cargo install tauri-cli --version ^2.0
+        echo "Tauri CLI installed, checking version..."
+        $env:PATH += ";$env:USERPROFILE\.cargo\bin"
+        cargo tauri --version
+      shell: pwsh
       
     - name: Install frontend dependencies
       run: |
@@ -44,15 +50,11 @@ jobs:
         cd web
         npm run build
         
-    - name: Build Tauri app
-      run: |
-        cd src-tauri
-        cargo build --release --target ${{ matrix.target }}
-        
     - name: Build Windows installer
       run: |
-        cd src-tauri
-        cargo tauri build --target ${{ matrix.target }}
+        $env:PATH += ";$env:USERPROFILE\.cargo\bin"
+        npm run tauri build -- --target ${{ matrix.target }}
+      shell: pwsh
         
     - name: List build outputs
       run: |

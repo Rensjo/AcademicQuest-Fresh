@@ -67,7 +67,15 @@ jobs:
         
     - name: Install Tauri CLI
       run: |
+        echo "Installing Tauri CLI via cargo..."
         cargo install tauri-cli --version ^2.0
+        echo "Tauri CLI installed, checking version..."
+        if [ "${{ matrix.platform }}" = "windows" ]; then
+          powershell -Command '$env:PATH += ";$env:USERPROFILE\.cargo\bin"; cargo tauri --version'
+        else
+          export PATH="$HOME/.cargo/bin:$PATH"
+          cargo tauri --version
+        fi
       
     - name: Install frontend dependencies
       run: |

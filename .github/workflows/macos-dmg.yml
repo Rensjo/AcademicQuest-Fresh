@@ -25,6 +25,11 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Install macOS dependencies
+        run: |
+          # Install create-dmg for DMG creation
+          npm install -g create-dmg || true
+
       # Build web application for Tauri
       - name: Build web (prod)
         run: |
