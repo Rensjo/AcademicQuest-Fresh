@@ -7,7 +7,8 @@
     "build:web": "cd web && npm ci && npm run build && cd .. && powershell -NoProfile -Command \"Remove-Item -Recurse -Force web-dist -ErrorAction SilentlyContinue; New-Item -ItemType Directory -Force -Path web-dist | Out-Null; Copy-Item -Recurse -Force web/dist/* web-dist/\"",
     "dev:tauri": "npm run dev:web & tauri dev",
     "build:tauri": "npm run build:web && tauri build",
-    "tauri": "tauri"
+    "tauri": "tauri",
+    "install-tauri-cli": "cargo install tauri-cli --version ^2.0"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.7.0"

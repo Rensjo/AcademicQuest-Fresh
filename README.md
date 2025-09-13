@@ -46,24 +46,50 @@ A modern, gamified academic planning and productivity application built with Tau
 
 ### Installation
 
+#### Option 1: Automated Setup (Recommended)
+
+**Linux/macOS:**
+```bash
+git clone https://github.com/Rensjo/AcademicQuest-Fresh.git
+cd AcademicQuest-Fresh
+chmod +x setup.sh
+./setup.sh
+```
+
+**Windows:**
+```cmd
+git clone https://github.com/Rensjo/AcademicQuest-Fresh.git
+cd AcademicQuest-Fresh
+setup.bat
+```
+
+#### Option 2: Manual Setup
+
 1. **Clone the repository**
    ```bash
    git clone https://github.com/Rensjo/AcademicQuest-Fresh.git
    cd AcademicQuest-Fresh
    ```
 
-2. **Install dependencies**
+2. **Install Tauri CLI**
+   ```bash
+   cargo install tauri-cli --version ^2.0
+   # Or use the npm script:
+   npm run install-tauri-cli
+   ```
+
+3. **Install dependencies**
    ```bash
    npm install
    cd web && npm install && cd ..
    ```
 
-3. **Run in development mode**
+4. **Run in development mode**
    ```bash
    npm run dev:tauri
    ```
 
-4. **Build for production**
+5. **Build for production**
    ```bash
    npm run build:tauri
    ```
@@ -131,6 +157,36 @@ Customizable audio feedback system with:
 - UI interaction sounds
 - Achievement notifications
 - Study session alerts
+
+## 🔧 Troubleshooting
+
+### Common Build Issues
+
+**Windows: "no such command: tauri"**
+```cmd
+# Install Tauri CLI manually
+cargo install tauri-cli --version ^2.0
+# Or run the setup script
+setup.bat
+```
+
+**Linux: "Unable to locate package libwebkit2gtk-4.0-dev"**
+- This occurs on newer Ubuntu versions. The build process automatically falls back to `libwebkit2gtk-4.1-dev`
+- You can also install manually: `sudo apt-get install libwebkit2gtk-4.1-dev`
+
+**macOS: DMG bundle creation fails**
+- Ensure Xcode Command Line Tools are installed: `xcode-select --install`
+- The build process will use unsigned builds for development (this is normal)
+
+**General: Cargo/npm permission errors**
+- Ensure proper permissions for cargo and npm directories
+- On Unix systems: `chmod -R 755 ~/.cargo ~/.npm`
+
+### Getting Help
+
+- 📖 Check our [FAQ](FAQ.md) for common questions
+- 🐛 Report bugs via [GitHub Issues](https://github.com/Rensjo/AcademicQuest-Fresh/issues)
+- 💬 Join discussions in our [GitHub Discussions](https://github.com/Rensjo/AcademicQuest-Fresh/discussions)
 
 ## 🤝 Contributing
 
