@@ -30,12 +30,6 @@
       "icons/AcademicQuest-Icon.png",
       "icons/icon.icns", 
       "icons/AcademicQuest-Icon.ico"
-    ],
-    "macOS": {
-      "icon": "icons/AcademicQuest-Icon.png"
-    },
-    "windows": {
-      "icon": "icons/AcademicQuest-Icon.ico"
-    }
+    ]
   }
 }
