@@ -25,11 +25,17 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      # Build web application using root package.json scripts
+      # Build web application for Tauri
       - name: Build web (prod)
         run: |
           npm ci
-          npm run build:web
+          cd web
+          npm ci
+          npm run build
+          cd ..
+          # Copy web build to web-dist for Tauri
+          mkdir -p web-dist
+          cp -r web/dist/* web-dist/
 
       - name: Build Tauri DMG (ad-hoc)
         uses: tauri-apps/tauri-action@v0
