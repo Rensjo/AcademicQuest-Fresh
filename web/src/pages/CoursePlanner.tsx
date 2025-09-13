@@ -16,6 +16,7 @@ import { Plus, CalendarDays, Save as SaveIcon, BookOpen, User, ClipboardList, Tr
 import { useTheme, PALETTES } from "@/store/theme";
 import { useToast } from "@/hooks/use-toast";
 import TopTabsInline from "@/components/TopTabsInline";
+import { validateStoredData } from "@/lib/dataRecovery";
 
 // week checkbox helper
 const DAYS = ["S", "M", "T", "W", "Th", "F", "S2"] as const;
@@ -73,6 +74,19 @@ export default function CoursePlanner() {
   
   // No explicit hydration flag; Zustand persist rehydrates synchronously enough for default UI.
   const hydrated = true;
+  
+  // Validate data integrity on component mount
+  React.useEffect(() => {
+    const validation = validateStoredData();
+    if (!validation.isValid) {
+      console.warn('Data validation failed:', validation.errors);
+      toast({
+        title: "Data Issue Detected",
+        description: "Some data may be corrupted. The application will attempt to recover automatically.",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
   
   // Use Course Planner's own selection, fallback to schedule selection, then first available
   const activeYearId = coursePlannerSelectedYearId || scheduleSelectedYearId || years[0]?.id;
@@ -313,6 +327,10 @@ export default function CoursePlanner() {
   // modules UI state
   const [activeModuleId, setActiveModuleId] = React.useState<string | undefined>(course?.modules?.[0]?.id);
   const editorRef = React.useRef<RichTextEditorHandle | null>(null);
+  
+  // Debounced save state
+  const [pendingChanges, setPendingChanges] = React.useState<Map<string, string>>(new Map());
+  const saveTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   // Delete confirmation dialog state
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [pendingDelete, setPendingDelete] = React.useState<{ id: string; title: string } | null>(null);
@@ -326,6 +344,91 @@ export default function CoursePlanner() {
       setActiveModuleId(ids[0]);
     }
   }, [modulesList, activeModuleId]);
+
+  // Debounced save function for module content
+  const debouncedSaveModule = React.useCallback((moduleId: string, html: string) => {
+    if (!course) return;
+    
+    // Clear existing timeout
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    
+    // Update pending changes
+    setPendingChanges(prev => new Map(prev.set(moduleId, html)));
+    
+    // Set new timeout for saving
+    saveTimeoutRef.current = setTimeout(() => {
+      try {
+        // Validate HTML content before saving
+        const sanitizedHtml = html.trim();
+        
+        // Only save if content has actually changed
+        const currentModule = course.modules.find(m => m.id === moduleId);
+        if (currentModule && currentModule.html === sanitizedHtml) {
+          return; // No change, skip save
+        }
+        
+        // Update the store
+        updateModule(key, course.id, moduleId, sanitizedHtml);
+        
+        // Clear from pending changes
+        setPendingChanges(prev => {
+          const newMap = new Map(prev);
+          newMap.delete(moduleId);
+          return newMap;
+        });
+        
+        console.log(`✅ Module ${moduleId} content saved successfully`);
+      } catch (error) {
+        console.error(`❌ Failed to save module ${moduleId}:`, error);
+        toast({
+          title: "Save Error",
+          description: "Failed to save module content. Please try again.",
+          variant: "destructive",
+        });
+      }
+    }, 1000); // 1 second debounce
+  }, [course, key, updateModule, toast]);
+
+  // Cleanup timeout on unmount
+  React.useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  // Force save all pending changes before navigation
+  const saveAllPendingChanges = React.useCallback(() => {
+    if (!course) return;
+    
+    pendingChanges.forEach((html, moduleId) => {
+      try {
+        updateModule(key, course.id, moduleId, html.trim());
+        console.log(`💾 Force saved module ${moduleId}`);
+      } catch (error) {
+        console.error(`❌ Failed to force save module ${moduleId}:`, error);
+      }
+    });
+    
+    setPendingChanges(new Map());
+  }, [course, key, updateModule, pendingChanges]);
+
+  // Periodic auto-save every 30 seconds
+  React.useEffect(() => {
+    if (pendingChanges.size === 0) return;
+    
+    const autoSaveInterval = setInterval(() => {
+      if (pendingChanges.size > 0) {
+        console.log(`🔄 Auto-saving ${pendingChanges.size} pending changes...`);
+        saveAllPendingChanges();
+      }
+    }, 30000); // 30 seconds
+    
+    return () => clearInterval(autoSaveInterval);
+  }, [pendingChanges.size, saveAllPendingChanges]);
 
   // file uploading
   const onUpload = async (path: string, files: FileList | null) => {
@@ -429,15 +532,28 @@ export default function CoursePlanner() {
   // Save on unmount (navigate away/refresh) - ensure last content is persisted into store
   React.useEffect(() => {
     const handler = () => {
-      if (!course || !activeModuleId) return;
-      const liveHtml = editorRef.current?.getHTML() ?? course.modules.find((m) => m.id === activeModuleId)?.html ?? "";
-      updateModule(key, course.id, activeModuleId, liveHtml);
+      // Force save all pending changes
+      saveAllPendingChanges();
+      
+      // Also save current active module if it has unsaved changes
+      if (course && activeModuleId) {
+        const liveHtml = editorRef.current?.getHTML() ?? "";
+        if (liveHtml.trim()) {
+          try {
+            updateModule(key, course.id, activeModuleId, liveHtml.trim());
+            console.log(`💾 Final save on unmount for module ${activeModuleId}`);
+          } catch (error) {
+            console.error(`❌ Failed to save on unmount:`, error);
+          }
+        }
+      }
     };
+    
     window.addEventListener('beforeunload', handler);
     return () => {
       window.removeEventListener('beforeunload', handler);
     };
-  }, [course, activeModuleId, key, updateModule]);
+  }, [course, activeModuleId, key, updateModule, saveAllPendingChanges]);
 
   // Ctrl/Cmd+S to save notes quickly (stable listener)
   const saveRef = React.useRef(onSaveModuleNotes);
@@ -950,20 +1066,40 @@ export default function CoursePlanner() {
             <Card className="border-0 shadow-lg rounded-3xl bg-white/80 dark:bg-neutral-900/60">
               <CardContent className="p-3">
                 <div className="flex items-center justify-between mb-2">
-                  <div className="text-sm font-semibold">Notes</div>
-                  <Button 
-                    size="sm" 
-                    className="h-8 rounded-2xl px-3 bg-gradient-to-r from-green-600/90 to-emerald-600/90 dark:from-green-500/90 dark:to-emerald-500/90
-                              hover:from-green-700/95 hover:to-emerald-700/95 dark:hover:from-green-400/95 dark:hover:to-emerald-400/95
-                              text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 
-                              hover:scale-105 active:scale-95 hover:-translate-y-0.5 active:translate-y-0
-                              font-medium tracking-wide backdrop-blur-md
-                              ring-2 ring-green-200/50 dark:ring-green-400/30 hover:ring-green-300/60 dark:hover:ring-green-300/40" 
-                    onClick={onSaveModuleNotes} 
-                    disabled={!course || !activeModuleId}
-                  >
-                    <SaveIcon className="h-4 w-4 mr-1" /> Save
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    <div className="text-sm font-semibold">Notes</div>
+                    {pendingChanges.has(activeModuleId || '') && (
+                      <div className="flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                        <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
+                        <span>Unsaved changes</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {pendingChanges.size > 0 && (
+                      <Button 
+                        size="sm" 
+                        variant="outline"
+                        className="h-8 rounded-2xl px-3 text-xs"
+                        onClick={saveAllPendingChanges}
+                      >
+                        Save All ({pendingChanges.size})
+                      </Button>
+                    )}
+                    <Button 
+                      size="sm" 
+                      className="h-8 rounded-2xl px-3 bg-gradient-to-r from-green-600/90 to-emerald-600/90 dark:from-green-500/90 dark:to-emerald-500/90
+                                hover:from-green-700/95 hover:to-emerald-700/95 dark:hover:from-green-400/95 dark:hover:to-emerald-400/95
+                                text-white border-0 shadow-lg hover:shadow-xl transition-all duration-300 
+                                hover:scale-105 active:scale-95 hover:-translate-y-0.5 active:translate-y-0
+                                font-medium tracking-wide backdrop-blur-md
+                                ring-2 ring-green-200/50 dark:ring-green-400/30 hover:ring-green-300/60 dark:hover:ring-green-300/40" 
+                      onClick={onSaveModuleNotes} 
+                      disabled={!course || !activeModuleId}
+                    >
+                      <SaveIcon className="h-4 w-4 mr-1" /> Save
+                    </Button>
+                  </div>
                 </div>
                 <div className="flex items-start gap-3">
                   {/* Module chips column */}
@@ -1029,7 +1165,7 @@ export default function CoursePlanner() {
                       <RichTextEditor
                         ref={editorRef}
                         value={course.modules.find((m) => m.id === activeModuleId)?.html || ""}
-                        onChange={(html) => updateModule(key, course.id, activeModuleId, html)}
+                        onChange={(html) => debouncedSaveModule(activeModuleId, html)}
                         placeholder="Write your module notes here…"
                       />
                     ) : (

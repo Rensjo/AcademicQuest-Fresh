@@ -171,15 +171,59 @@ export const useCoursePlanner = create<State>()(
           },
         })),
 
-      updateModule: (key, courseId, moduleId, html) =>
-        set((s) => ({
-          byYearTerm: {
-            ...s.byYearTerm,
-            [key]: (s.byYearTerm[key] || []).map((c) =>
-              c.id !== courseId ? c : { ...c, modules: c.modules.map((m) => (m.id === moduleId ? { ...m, html } : m)) }
-            ),
-          },
-        })),
+      updateModule: (key, courseId, moduleId, html) => {
+        try {
+          // Validate inputs
+          if (!key || !courseId || !moduleId) {
+            console.error('Invalid parameters for updateModule:', { key, courseId, moduleId });
+            return;
+          }
+          
+          // Sanitize HTML content
+          const sanitizedHtml = typeof html === 'string' ? html.trim() : '';
+          
+          set((s) => {
+            const courses = s.byYearTerm[key] || [];
+            const courseIndex = courses.findIndex(c => c.id === courseId);
+            
+            if (courseIndex === -1) {
+              console.warn(`Course ${courseId} not found in ${key}`);
+              return s; // No change if course not found
+            }
+            
+            const course = courses[courseIndex];
+            const moduleIndex = course.modules.findIndex(m => m.id === moduleId);
+            
+            if (moduleIndex === -1) {
+              console.warn(`Module ${moduleId} not found in course ${courseId}`);
+              return s; // No change if module not found
+            }
+            
+            // Create updated course with new module content
+            const updatedCourse = {
+              ...course,
+              modules: course.modules.map((m, index) => 
+                index === moduleIndex ? { ...m, html: sanitizedHtml } : m
+              )
+            };
+            
+            const updatedCourses = [...courses];
+            updatedCourses[courseIndex] = updatedCourse;
+            
+            return {
+              byYearTerm: {
+                ...s.byYearTerm,
+                [key]: updatedCourses,
+              },
+            };
+          });
+          
+          console.log(`✅ Module ${moduleId} updated successfully`);
+        } catch (error) {
+          console.error(`❌ Failed to update module ${moduleId}:`, error);
+          throw error; // Re-throw to let caller handle
+        }
+      },
 
       addTask: (key, courseId, task) =>
         set((s) => {
@@ -351,6 +395,62 @@ export const useCoursePlanner = create<State>()(
           },
         })),
   }),
-  { name: "aq:course-planner" }
+  { 
+    name: "aq:course-planner",
+    version: 1,
+    migrate: (persistedState: any, version: number) => {
+      // Handle data migration and validation
+      if (version === 0) {
+        // Migrate from version 0 to 1
+        return {
+          ...persistedState,
+          byYearTerm: persistedState.byYearTerm || {},
+          selectedCourseId: persistedState.selectedCourseId || undefined,
+          selectedYearId: persistedState.selectedYearId || undefined,
+          selectedTermId: persistedState.selectedTermId || undefined,
+        };
+      }
+      return persistedState;
+    },
+    onRehydrateStorage: () => (state) => {
+      // Validate and fix corrupted data on rehydration
+      if (state) {
+        // Ensure byYearTerm is an object
+        if (!state.byYearTerm || typeof state.byYearTerm !== 'object') {
+          state.byYearTerm = {};
+        }
+        
+        // Validate each course in each year/term
+        Object.keys(state.byYearTerm).forEach(key => {
+          const courses = state.byYearTerm[key];
+          if (!Array.isArray(courses)) {
+            state.byYearTerm[key] = [];
+          } else {
+            // Validate each course
+            state.byYearTerm[key] = courses.filter(course => {
+              return course && 
+                     typeof course.id === 'string' && 
+                     typeof course.title === 'string' &&
+                     Array.isArray(course.modules) &&
+                     Array.isArray(course.tasks) &&
+                     Array.isArray(course.folders);
+            }).map(course => ({
+              ...course,
+              // Ensure required fields exist
+              code: course.code || '',
+              title: course.title || 'Untitled Course',
+              instructor: course.instructor || undefined,
+              syllabusUrl: course.syllabusUrl || undefined,
+              linkedSlotId: course.linkedSlotId || undefined,
+              weeklyAttendance: course.weeklyAttendance || {},
+              modules: course.modules || [{ id: uid("m"), title: "M1", html: "" }],
+              tasks: course.tasks || [],
+              folders: course.folders || [{ id: uid("fold"), path: "root", files: [] }],
+            }));
+          }
+        });
+      }
+    },
+  }
   )
 );
