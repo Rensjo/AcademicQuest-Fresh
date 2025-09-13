@@ -22,7 +22,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["dmg", "app"],
+    "targets": ["dmg", "app", "msi", "nsis", "appimage", "deb", "rpm"],
     "icon": [
       "icons/32x32.png", 
       "icons/128x128.png", 
@@ -30,6 +30,27 @@
       "icons/AcademicQuest-Icon.png",
       "icons/icon.icns", 
       "icons/AcademicQuest-Icon.ico"
-    ]
+    ],
+    "publisher": "Renkai Studio",
+    "copyright": "Copyright © 2024 Renkai Studio. All rights reserved.",
+    "category": "Education",
+    "shortDescription": "Academic planning and course management application",
+    "longDescription": "AcademicQuest Fresh is a comprehensive academic planning and course management application designed to help students organize their academic journey, track courses, manage assignments, and plan their educational path effectively.",
+    "windows": {
+      "wix": {
+        "language": ["en-US"]
+      },
+      "nsis": {
+        "languages": ["English"]
+      }
+    },
+    "linux": {
+      "deb": {
+        "depends": ["libgtk-3-0", "libwebkit2gtk-4.0-37", "libappindicator3-1", "librsvg2-2"]
+      },
+      "rpm": {
+        "depends": ["gtk3", "webkit2gtk3", "libappindicator-gtk3", "librsvg2"]
+      }
+    }
   }
 }

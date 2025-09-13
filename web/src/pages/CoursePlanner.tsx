@@ -80,23 +80,57 @@ export default function CoursePlanner() {
     const validation = validateStoredData();
     if (!validation.isValid) {
       console.warn('Data validation failed:', validation.errors);
+      // Try to recover the data
+      try {
+        const coursePlannerData = localStorage.getItem('aq:course-planner');
+        if (coursePlannerData) {
+          const parsed = JSON.parse(coursePlannerData);
+          if (parsed && typeof parsed === 'object') {
+            // Fix the data structure
+            const fixedData = {
+              ...parsed,
+              byYearTerm: parsed.byYearTerm || {},
+              selectedCourseId: parsed.selectedCourseId || undefined,
+              selectedYearId: parsed.selectedYearId || undefined,
+              selectedTermId: parsed.selectedTermId || undefined,
+            };
+            localStorage.setItem('aq:course-planner', JSON.stringify(fixedData));
+            console.log('Data recovery successful');
+          }
+        }
+      } catch (error) {
+        console.error('Data recovery failed:', error);
+      }
+      
       toast({
         title: "Data Issue Detected",
         description: "Some data may be corrupted. The application will attempt to recover automatically.",
         variant: "destructive",
       });
     }
-  }, [toast]);
+  }, [toast]); // Run only once on mount
   
   // Use Course Planner's own selection, fallback to schedule selection, then first available
-  const activeYearId = coursePlannerSelectedYearId || scheduleSelectedYearId || years[0]?.id;
-  const year = years.find((y) => y.id === activeYearId);
-  const activeTerm = coursePlannerSelectedTermId 
-    ? year?.terms?.find(t => t.id === coursePlannerSelectedTermId) 
-    : year?.terms?.[0]; // fallback to first term
+  const activeYearId = React.useMemo(() => 
+    coursePlannerSelectedYearId || scheduleSelectedYearId || years[0]?.id,
+    [coursePlannerSelectedYearId, scheduleSelectedYearId, years]
+  );
+  const year = React.useMemo(() => 
+    years.find((y) => y.id === activeYearId),
+    [years, activeYearId]
+  );
+  const activeTerm = React.useMemo(() => 
+    coursePlannerSelectedTermId 
+      ? year?.terms?.find(t => t.id === coursePlannerSelectedTermId) 
+      : year?.terms?.[0], // fallback to first term
+    [coursePlannerSelectedTermId, year?.terms]
+  );
 
   // Get academic plan courses for the current term to cross-reference
-  const academicYear = academicYears.find(y => y.id === (academicSelectedYearId || academicYears[0]?.id));
+  const academicYear = React.useMemo(() => 
+    academicYears.find(y => y.id === (academicSelectedYearId || academicYears[0]?.id)),
+    [academicYears, academicSelectedYearId]
+  );
 
   // Global tasks store
   const tasks = useTasksStore((s) => s.tasks);
@@ -120,8 +154,10 @@ export default function CoursePlanner() {
     [activeYearId, activeTerm?.id]
   );
 
-  // course planner store
-  const courses = useCoursePlanner((s) => s.byYearTerm[key] || []);
+  // course planner store - use stable selector with fallback
+  const coursesRaw = useCoursePlanner((s) => s.byYearTerm[key]);
+  const courses = React.useMemo(() => coursesRaw || [], [coursesRaw]);
+  
   const selectedCourseId = useCoursePlanner((s) => s.selectedCourseId);
   const setSelectedCourse = useCoursePlanner((s) => s.setSelectedCourse);
   const addCourse = useCoursePlanner((s) => s.addCourse);
@@ -155,25 +191,146 @@ export default function CoursePlanner() {
     }
   };
 
-  // ensure one demo course on first use
+  // Initialize Course Planner's own year/term selection if not set
+  const initialized = React.useRef(false);
   React.useEffect(() => {
-    if (!hydrated) return;
-    // Initialize Course Planner's own year/term selection if not set
-    if (!coursePlannerSelectedYearId && activeYearId) setCourseplannerSelectedYear(activeYearId);
-    if (!coursePlannerSelectedTermId && activeTerm?.id) setCourseplannerSelectedTerm(activeTerm.id);
+    if (!hydrated || initialized.current) return;
     
-    if (!courses.length && activeYearId && activeTerm?.id) {
+    let shouldUpdate = false;
+    
+    // Initialize Course Planner's own year/term selection if not set
+    if (!coursePlannerSelectedYearId && activeYearId) {
+      setCourseplannerSelectedYear(activeYearId);
+      shouldUpdate = true;
+    }
+    if (!coursePlannerSelectedTermId && activeTerm?.id) {
+      setCourseplannerSelectedTerm(activeTerm.id);
+      shouldUpdate = true;
+    }
+    
+    if (shouldUpdate) {
+      initialized.current = true;
+    }
+  }, [hydrated, activeYearId, activeTerm?.id, coursePlannerSelectedYearId, coursePlannerSelectedTermId, setCourseplannerSelectedYear, setCourseplannerSelectedTerm]);
+
+  // Add demo course separately to avoid infinite loop
+  const demoCourseAdded = React.useRef(false);
+  const lastKeyRef = React.useRef<string>('');
+  React.useEffect(() => {
+    const currentKey = `${activeYearId || "y"}::${activeTerm?.id || "t"}`;
+    if (!hydrated || !activeYearId || !activeTerm?.id) return;
+    
+    // Reset flag when key changes (different year/term)
+    if (lastKeyRef.current !== currentKey) {
+      demoCourseAdded.current = false;
+      lastKeyRef.current = currentKey;
+    }
+    
+    if (courses.length === 0 && !demoCourseAdded.current) {
+      demoCourseAdded.current = true;
       const id = addCourse(key, { title: "Course Title", code: "" });
       setSelectedCourse(id);
     }
-  }, [hydrated, courses.length, activeYearId, activeTerm?.id, addCourse, setSelectedCourse, key, coursePlannerSelectedYearId, coursePlannerSelectedTermId, setCourseplannerSelectedYear, setCourseplannerSelectedTerm]);
+  }, [hydrated, activeYearId, activeTerm?.id, courses.length, addCourse, setSelectedCourse, key]);
 
-  const course = courses.find((c) => c.id === selectedCourseId) || courses[0];
+  const course = React.useMemo(() => 
+    courses.find((c) => c.id === selectedCourseId) || courses[0], 
+    [courses, selectedCourseId]
+  );
+
+  // Memoized handlers for year/term selection
+  const handleYearSelect = React.useCallback((yearId: string, terms: { id: string }[]) => {
+    setCourseplannerSelectedYear(yearId);
+    // Reset term selection when year changes
+    if (terms?.[0]) {
+      setCourseplannerSelectedTerm(terms[0].id);
+    }
+  }, [setCourseplannerSelectedYear, setCourseplannerSelectedTerm]);
+
+  const handleTermSelect = React.useCallback((termId: string) => {
+    setCourseplannerSelectedTerm(termId);
+  }, [setCourseplannerSelectedTerm]);
+
+  // Get SchedulePlanner courses for the current term
+  const scheduleCoursesForTerm = React.useMemo(() => {
+    if (!activeTerm) return [];
+    
+    const currentYear = years.find(y => y.id === activeYearId);
+    const termIndex = currentYear?.terms?.findIndex(t => t.id === activeTerm.id) ?? -1;
+    if (termIndex === -1) return [];
+    
+    const slots = currentYear?.terms?.[termIndex]?.slots || [];
+    
+    // Group unique courses from schedule slots
+    const uniqueCourses = new Map();
+    slots.forEach(slot => {
+      if (slot.title && slot.title.trim()) {
+        const key = `${slot.courseCode || ''}-${slot.title}`.toLowerCase();
+        if (!uniqueCourses.has(key)) {
+          uniqueCourses.set(key, {
+            title: slot.title,
+            code: slot.courseCode || '',
+            id: `schedule-${slot.id}`,
+            source: 'schedule'
+          });
+        }
+      }
+    });
+    
+    return Array.from(uniqueCourses.values());
+  }, [years, activeYearId, activeTerm]);
+
+  // Helper function to safely update course with null checks
+  const safeUpdateCourse = React.useCallback((field: string, value: string) => {
+    if (!course) {
+      console.warn('Cannot update course: course is undefined');
+      return;
+    }
+    
+    try {
+      const updatedCourse = { ...course, [field]: value };
+      updateCourse(key, updatedCourse);
+    } catch (error) {
+      console.error(`Failed to update course ${field}:`, error);
+      toast({
+        title: "Update Error",
+        description: `Failed to update ${field}. Please try again.`,
+        variant: "destructive",
+      });
+    }
+  }, [course, key, updateCourse, toast]);
+
+  // Helper function to create course from SchedulePlanner selection
+  const createCourseFromSchedule = React.useCallback((scheduleItem: { title: string; code: string; id: string; source: string }) => {
+    if (!activeYearId || !activeTerm?.id) return;
+    
+    try {
+      const courseData = {
+        title: scheduleItem.title,
+        code: scheduleItem.code,
+        linkedSlotId: scheduleItem.id === `schedule-${scheduleItem.id}` ? scheduleItem.id.replace('schedule-', '') : undefined
+      };
+      
+      const courseId = addCourse(key, courseData);
+      setSelectedCourse(courseId);
+      
+      toast({
+        title: "Course Added",
+        description: `${scheduleItem.title} has been added to your course planner.`,
+      });
+    } catch (error) {
+      console.error('Failed to create course from schedule:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create course. Please try again.",
+        variant: "destructive",
+      });
+    }
+  }, [activeYearId, activeTerm, key, addCourse, setSelectedCourse, toast]);
 
   // Filter global tasks for current course - comprehensive matching across all systems
   const courseTasks = React.useMemo(() => {
     if (!course || !tasks || tasks.length === 0) {
-      console.log('🔍 CoursePlanner: No course or no tasks', { course, tasksLength: tasks?.length || 0 });
       return [];
     }
     
@@ -207,30 +364,12 @@ export default function CoursePlanner() {
     // Remove duplicates and filter out empty values
     const uniqueIdentifiers = [...new Set(courseIdentifiers)].filter(Boolean);
     
-    console.log('🔍 CoursePlanner Comprehensive Debug:', {
-      course: { 
-        id: course.id, 
-        code: course.code, 
-        title: course.title 
-      },
-      matchingAcademicCourse,
-      uniqueIdentifiers,
-      allTasks: tasks.map(t => ({
-        id: t.id,
-        title: t.title,
-        courseId: t.courseId,
-        yearId: t.yearId,
-        termId: t.termId
-      })),
-      totalTasks: tasks.length
-    });
-    
     // Filter tasks that match any of the course identifiers
     const matchedTasks = tasks.filter(task => {
       if (!task.courseId) return false;
       
       // Check if task's courseId matches any of our course identifiers
-      const matches = uniqueIdentifiers.some(identifier => {
+      return uniqueIdentifiers.some(identifier => {
         // Exact match
         if (task.courseId === identifier) return true;
         
@@ -239,15 +378,8 @@ export default function CoursePlanner() {
         
         return false;
       });
-      
-      if (matches) {
-        console.log(`✅ Task matched: "${task.title}" (courseId: "${task.courseId}") matches course "${course.code || course.title}"`);
-      }
-      
-      return matches;
     });
     
-    console.log(`🎯 Found ${matchedTasks.length} tasks for course "${course.code || course.title}":`, matchedTasks);
     return matchedTasks;
   }, [tasks, course, academicYear]);
 
@@ -325,77 +457,60 @@ export default function CoursePlanner() {
   }, [classMeta, course, key, updateCourse, scheduleTerm]);
 
   // modules UI state
-  const [activeModuleId, setActiveModuleId] = React.useState<string | undefined>(course?.modules?.[0]?.id);
+  const [activeModuleId, setActiveModuleId] = React.useState<string | undefined>(undefined);
   const editorRef = React.useRef<RichTextEditorHandle | null>(null);
   
   // Debounced save state
-  const [pendingChanges, setPendingChanges] = React.useState<Map<string, string>>(new Map());
+  const [pendingChanges, setPendingChanges] = React.useState<Map<string, string>>(() => new Map());
   const saveTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   // Delete confirmation dialog state
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [pendingDelete, setPendingDelete] = React.useState<{ id: string; title: string } | null>(null);
   const [confirmText, setConfirmText] = React.useState("");
-  // Track module list by a stable key to avoid effect churn on content edits
-  const modulesList = course?.modules;
-  React.useEffect(() => {
-    const ids = modulesList?.map((m) => m.id) ?? [];
-    if (ids.length === 0) return;
-    if (!activeModuleId || !ids.includes(activeModuleId)) {
-      setActiveModuleId(ids[0]);
-    }
-  }, [modulesList, activeModuleId]);
+  
+  // Memoized handlers to prevent function recreation
+  const handleModuleSelect = React.useCallback((moduleId: string) => {
+    setActiveModuleId(moduleId);
+  }, []);
 
-  // Debounced save function for module content
-  const debouncedSaveModule = React.useCallback((moduleId: string, html: string) => {
+  const handleModuleDelete = React.useCallback((moduleId: string, title: string) => {
+    setPendingDelete({ id: moduleId, title });
+    setConfirmText("");
+    setDeleteOpen(true);
+  }, []);
+
+  const handleAddModule = React.useCallback(() => {
     if (!course) return;
-    
-    // Clear existing timeout
-    if (saveTimeoutRef.current) {
-      clearTimeout(saveTimeoutRef.current);
+    const nextTitle = `M${(course?.modules.length || 0) + 1}`;
+    const id = addModule(key, course.id, nextTitle);
+    setActiveModuleId(id);
+  }, [course, addModule, key]);
+
+  const handleModuleContentChange = React.useCallback((html: string) => {
+    if (!course || !activeModuleId) return;
+    updateModule(key, course.id, activeModuleId, html);
+  }, [course, activeModuleId, updateModule, key]);
+
+  const activeModuleContent = React.useMemo(() => {
+    return course?.modules.find((m) => m.id === activeModuleId)?.html || "";
+  }, [course?.modules, activeModuleId]);
+  
+  // Track module list by a stable key to avoid effect churn on content edits
+  const moduleIds = React.useMemo(() => course?.modules?.map((m) => m.id) ?? [], [course?.modules]);
+  React.useEffect(() => {
+    if (moduleIds.length === 0) return;
+    if (!activeModuleId || !moduleIds.includes(activeModuleId)) {
+      setActiveModuleId(moduleIds[0]);
     }
-    
-    // Update pending changes
-    setPendingChanges(prev => new Map(prev.set(moduleId, html)));
-    
-    // Set new timeout for saving
-    saveTimeoutRef.current = setTimeout(() => {
-      try {
-        // Validate HTML content before saving
-        const sanitizedHtml = html.trim();
-        
-        // Only save if content has actually changed
-        const currentModule = course.modules.find(m => m.id === moduleId);
-        if (currentModule && currentModule.html === sanitizedHtml) {
-          return; // No change, skip save
-        }
-        
-        // Update the store
-        updateModule(key, course.id, moduleId, sanitizedHtml);
-        
-        // Clear from pending changes
-        setPendingChanges(prev => {
-          const newMap = new Map(prev);
-          newMap.delete(moduleId);
-          return newMap;
-        });
-        
-        console.log(`✅ Module ${moduleId} content saved successfully`);
-      } catch (error) {
-        console.error(`❌ Failed to save module ${moduleId}:`, error);
-        toast({
-          title: "Save Error",
-          description: "Failed to save module content. Please try again.",
-          variant: "destructive",
-        });
-      }
-    }, 1000); // 1 second debounce
-  }, [course, key, updateModule, toast]);
+  }, [moduleIds, activeModuleId]);
+
 
   // Cleanup timeout on unmount
   React.useEffect(() => {
+    const timeout = saveTimeoutRef.current;
     return () => {
-      if (saveTimeoutRef.current) {
-        clearTimeout(saveTimeoutRef.current);
+      if (timeout) {
+        clearTimeout(timeout);
       }
     };
   }, []);
@@ -606,10 +721,14 @@ export default function CoursePlanner() {
               <Select
                 value={course?.id ?? ""}
                 onValueChange={(v) => {
-                  if (v === "__add_new__") {
-                    const id = addCourse(key, { title: "New Course", code: "" });
-                    setSelectedCourse(id);
+                  if (v.startsWith("schedule-")) {
+                    // This is a schedule course, create it in course planner
+                    const scheduleItem = scheduleCoursesForTerm.find(c => c.id === v);
+                    if (scheduleItem) {
+                      createCourseFromSchedule(scheduleItem);
+                    }
                   } else {
+                    // This is an existing course planner course
                     setSelectedCourse(v);
                   }
                 }}
@@ -619,16 +738,30 @@ export default function CoursePlanner() {
                   <SelectValue placeholder="Select course" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl border border-black/10 dark:border-white/10 bg-white/90 dark:bg-neutral-900/90 backdrop-blur shadow-xl data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95">
+                  {/* Existing Course Planner courses */}
                   {courses.map((c) => (
                     <SelectItem key={c.id} value={c.id} className="cursor-pointer hover:bg-white/60 dark:hover:bg-neutral-800/60 transition-colors duration-200">
                       <span className="font-medium">{c.code || ""}</span>
                       {c.title ? <span className="opacity-70">{c.code ? " \u2014 " : ""}{c.title}</span> : null}
                     </SelectItem>
                   ))}
-                  <div className="my-1 border-t border-black/10 dark:border-white/10" />
-                  <SelectItem value="__add_new__" className="cursor-pointer hover:bg-white/60 dark:hover:bg-neutral-800/60 transition-colors duration-200">
-                    <span className="inline-flex items-center"><Plus className="h-4 w-4 mr-2" /> Add New Course</span>
-                  </SelectItem>
+                  
+                  {/* Schedule Planner courses */}
+                  {scheduleCoursesForTerm.length > 0 && (
+                    <>
+                      <div className="my-1 border-t border-black/10 dark:border-white/10" />
+                      <div className="px-2 py-1 text-xs font-semibold text-gray-500 dark:text-gray-400 bg-gray-50/50 dark:bg-gray-800/50">
+                        From Schedule Planner
+                      </div>
+                      {scheduleCoursesForTerm.map((scheduleCourse) => (
+                        <SelectItem key={scheduleCourse.id} value={scheduleCourse.id} className="cursor-pointer hover:bg-white/60 dark:hover:bg-neutral-800/60 transition-colors duration-200">
+                          <span className="font-medium">{scheduleCourse.code || ""}</span>
+                          {scheduleCourse.title ? <span className="opacity-70">{scheduleCourse.code ? " \u2014 " : ""}{scheduleCourse.title}</span> : null}
+                        </SelectItem>
+                      ))}
+                    </>
+                  )}
+                  
                 </SelectContent>
               </Select>
               <Button 
@@ -649,7 +782,52 @@ export default function CoursePlanner() {
         </div>
 
         {/* === Two-column layout (30 / 70) ====================================== */}
-        <div className="grid grid-cols-12 gap-6 items-start">
+        <div className="grid grid-cols-12 gap-6 items-start relative">
+          {/* Lock Overlay when no SchedulePlanner data exists, no courses available, or course has no proper name */}
+          {(years.length === 0 || (courses.length === 0 && scheduleCoursesForTerm.length === 0) || (course && (!course.title || course.title === "Course Title" || course.title.trim() === ""))) && (
+            <div className="absolute inset-0 bg-black/5 dark:bg-black/20 backdrop-blur-sm z-20 flex items-center justify-center p-4">
+              <div className="bg-white/95 dark:bg-neutral-900/95 p-8 rounded-3xl shadow-2xl max-w-md text-center backdrop-blur-xl
+                            border border-gray-200/60 dark:border-gray-600/40 ring-1 ring-gray-100/50 dark:ring-gray-700/50">
+                <div className="mb-6">
+                  <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-blue-100 to-indigo-100 
+                                dark:from-blue-900/40 dark:to-indigo-900/40 mb-4">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-blue-600 dark:text-blue-400">
+                      <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-800 dark:text-gray-100 mb-3">
+                    {years.length === 0 
+                      ? 'Schedule Planner Required' 
+                      : (courses.length === 0 && scheduleCoursesForTerm.length === 0)
+                        ? 'No Courses Available'
+                        : 'Complete Course Setup First'
+                    }
+                  </h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {years.length === 0 
+                      ? 'To use the Course Planner, you must first create school years and terms in the Schedule Planner. This ensures proper course organization and data synchronization across all planning tools.'
+                      : (courses.length === 0 && scheduleCoursesForTerm.length === 0)
+                        ? 'No courses are available for the selected term. Add courses to your schedule in the Schedule Planner, or create them directly in the Course Planner.'
+                        : 'Please complete setting up your schedule in the Schedule Planner first before proceeding to this section. This ensures you have properly named courses to work with.'
+                    }
+                  </p>
+                </div>
+                <Button 
+                  onClick={() => window.location.href = '/schedule'}
+                  className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-lg
+                            rounded-2xl px-6 py-2 font-medium transition-all duration-200 hover:scale-105 active:scale-95"
+                >
+                  {years.length === 0 
+                    ? 'Go to Schedule Planner'
+                    : (courses.length === 0 && scheduleCoursesForTerm.length === 0)
+                      ? 'Go to Schedule Planner'
+                      : 'Complete Schedule Setup'
+                  }
+                </Button>
+              </div>
+            </div>
+          )}
           {/* LEFT COLUMN (30%) — schedule → tasks → files */}
           <div className="col-span-12 lg:col-span-4 space-y-6">
             {/* Weekly checkbox schedule */}
@@ -938,6 +1116,29 @@ export default function CoursePlanner() {
 
           {/* RIGHT COLUMN (70%) — title → meta → notes */}
           <div className="col-span-12 lg:col-span-8 space-y-6">
+            {/* No Course State */}
+            {!course && (
+              <Card className="border-0 shadow-xl rounded-3xl bg-gradient-to-br from-amber-50/95 to-orange-50/85 dark:from-amber-950/80 dark:to-orange-950/70 backdrop-blur-xl">
+                <CardContent className="p-8 text-center">
+                  <div className="text-6xl mb-4">📚</div>
+                  <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-100 mb-2">No Course Selected</h3>
+                  <p className="text-gray-600 dark:text-gray-300 mb-4">
+                    {scheduleCoursesForTerm.length > 0 
+                      ? "Select a course from your schedule planner above or add a new course manually."
+                      : "Add courses to your Schedule Planner first, then come back here to plan your coursework."}
+                  </p>
+                  {scheduleCoursesForTerm.length === 0 && (
+                    <Button 
+                      onClick={() => window.location.href = '/schedule'}
+                      className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-lg"
+                    >
+                      Go to Schedule Planner
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+            
             {/* Course title (single control at the top) */}
             <Card className="border-0 shadow-xl rounded-3xl bg-gradient-to-br from-white/95 to-white/85 dark:from-neutral-900/80 dark:to-neutral-800/70 backdrop-blur-xl">
               <CardContent className="p-6">
@@ -949,41 +1150,30 @@ export default function CoursePlanner() {
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex-1">
-                    <Label htmlFor="courseTitle" className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2 block">
+                    <Label className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2 block">
                       Course Title
                     </Label>
-                    <Input
-                      id="courseTitle"
-                      value={course?.title || ""}
-                      onChange={(e) => updateCourse(key, { ...course!, title: e.target.value })}
-                      placeholder="e.g., Introduction to Computer Science"
-                      className="border-0 shadow-lg rounded-2xl bg-gradient-to-br from-white/90 to-white/70 dark:from-neutral-800/60 dark:to-neutral-900/50 
-                                backdrop-blur-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 
-                                focus:shadow-xl focus:scale-[1.02] transition-all duration-200
-                                hover:shadow-md hover:bg-gradient-to-br hover:from-white hover:to-white/90 
-                                dark:hover:from-neutral-800/80 dark:hover:to-neutral-900/70"
-                    />
+                    <div className="h-10 px-4 py-2 rounded-2xl bg-gradient-to-br from-gray-50/90 to-gray-100/70 dark:from-neutral-800/60 dark:to-neutral-900/50 
+                                border border-gray-200/60 dark:border-gray-600/40 text-gray-800 dark:text-gray-200 
+                                flex items-center font-medium">
+                      {course?.title || "No course selected"}
+                    </div>
                   </div>
                   <div className="w-40">
-                    <Label htmlFor="courseCode" className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2 block">
+                    <Label className="text-xs font-medium text-gray-600 dark:text-gray-300 mb-2 block">
                       Course Code
                     </Label>
-                    <Input
-                      id="courseCode"
-                      value={course?.code || ""}
-                      onChange={(e) => updateCourse(key, { ...course!, code: e.target.value })}
-                      placeholder="CS101"
-                      className="border-0 shadow-lg rounded-2xl bg-gradient-to-br from-white/90 to-white/70 dark:from-neutral-800/60 dark:to-neutral-900/50 
-                                backdrop-blur-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 
-                                focus:shadow-xl focus:scale-[1.02] transition-all duration-200
-                                hover:shadow-md hover:bg-gradient-to-br hover:from-white hover:to-white/90 
-                                dark:hover:from-neutral-800/80 dark:hover:to-neutral-900/70"
-                    />
+                    <div className="h-10 px-4 py-2 rounded-2xl bg-gradient-to-br from-gray-50/90 to-gray-100/70 dark:from-neutral-800/60 dark:to-neutral-900/50 
+                                border border-gray-200/60 dark:border-gray-600/40 text-gray-800 dark:text-gray-200 
+                                flex items-center font-medium">
+                      {course?.code || "N/A"}
+                    </div>
                   </div>
                 </div>
+                
                 <div className="mt-4 p-3 rounded-2xl bg-gradient-to-r from-emerald-50/60 to-teal-50/40 dark:from-emerald-950/30 dark:to-teal-950/20 border border-emerald-200/30 dark:border-emerald-700/30">
                   <div className="text-xs text-emerald-700 dark:text-emerald-300 font-medium">
-                    📚 Enter your course details to begin organizing modules and assignments
+                    📚 {course ? 'Course details are automatically loaded from your selection. Manage modules and assignments below.' : 'Select a course from the dropdown above to start planning your coursework.'}
                   </div>
                 </div>
               </CardContent>
@@ -1006,8 +1196,9 @@ export default function CoursePlanner() {
                     <Input
                       id="instructor"
                       value={course?.instructor || ""}
-                      onChange={(e) => updateCourse(key, { ...course!, instructor: e.target.value })}
+                      onChange={(e) => safeUpdateCourse('instructor', e.target.value)}
                       placeholder="Professor Name"
+                      disabled={!course}
                       className="border-0 shadow-lg rounded-2xl bg-gradient-to-br from-white/90 to-white/70 dark:from-neutral-800/60 dark:to-neutral-900/50 
                                 backdrop-blur-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 
                                 focus:shadow-xl focus:scale-[1.02] transition-all duration-200
@@ -1044,8 +1235,9 @@ export default function CoursePlanner() {
                     <Input
                       id="syllabus"
                       value={course?.syllabusUrl || ""}
-                      onChange={(e) => updateCourse(key, { ...course!, syllabusUrl: e.target.value })}
+                      onChange={(e) => safeUpdateCourse('syllabusUrl', e.target.value)}
                       placeholder="https://example.com/syllabus"
+                      disabled={!course}
                       className="border-0 shadow-lg rounded-2xl bg-gradient-to-br from-white/90 to-white/70 dark:from-neutral-800/60 dark:to-neutral-900/50 
                                 backdrop-blur-sm placeholder:text-gray-400 dark:placeholder:text-gray-500 
                                 focus:shadow-xl focus:scale-[1.02] transition-all duration-200
@@ -1117,7 +1309,7 @@ export default function CoursePlanner() {
                                 ? 'bg-gradient-to-r from-blue-600/90 to-indigo-600/90 dark:from-blue-500/90 dark:to-indigo-500/90 text-white ring-2 ring-blue-200/50 dark:ring-blue-400/30 backdrop-blur-sm hover:from-blue-700/95 hover:to-indigo-700/95 dark:hover:from-blue-400/95 dark:hover:to-indigo-400/95' 
                                 : 'bg-gradient-to-r from-white/95 to-white/85 dark:from-neutral-800/80 dark:to-neutral-900/70 text-gray-700 dark:text-gray-200 hover:from-blue-50/90 hover:to-indigo-50/80 dark:hover:from-blue-950/40 dark:hover:to-indigo-950/30 hover:text-blue-700 dark:hover:text-blue-300 border border-gray-200/60 dark:border-gray-600/40 hover:border-blue-200/60 dark:hover:border-blue-400/30'
                               }`}
-                            onClick={() => setActiveModuleId(m.id)}
+                            onClick={() => handleModuleSelect(m.id)}
                             title={m.title}
                           >
                             <span className="text-[11px] font-semibold">{m.title}</span>
@@ -1129,9 +1321,7 @@ export default function CoursePlanner() {
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();
-                              setPendingDelete({ id: m.id, title: m.title });
-                              setConfirmText("");
-                              setDeleteOpen(true);
+                              handleModuleDelete(m.id, m.title);
                             }}
                           >
                             ×
@@ -1147,11 +1337,7 @@ export default function CoursePlanner() {
                                   hover:text-green-700 dark:hover:text-green-300 shadow-md hover:shadow-lg backdrop-blur-sm 
                                   border border-gray-200/60 dark:border-gray-600/40 hover:border-green-200/60 dark:hover:border-green-400/30
                                   transition-all duration-200 hover:scale-105 active:scale-95 hover:-translate-y-0.5 active:translate-y-0"
-                        onClick={() => {
-                          const nextTitle = `M${(course?.modules.length || 0) + 1}`;
-                          const id = addModule(key, course!.id, nextTitle);
-                          setActiveModuleId(id);
-                        }}
+                        onClick={handleAddModule}
                         title="Add module"
                       >
                         <Plus className="h-4 w-4" />
@@ -1164,8 +1350,8 @@ export default function CoursePlanner() {
                     {course && activeModuleId ? (
                       <RichTextEditor
                         ref={editorRef}
-                        value={course.modules.find((m) => m.id === activeModuleId)?.html || ""}
-                        onChange={(html) => debouncedSaveModule(activeModuleId, html)}
+                        value={activeModuleContent}
+                        onChange={handleModuleContentChange}
                         placeholder="Write your module notes here…"
                       />
                     ) : (
@@ -1388,13 +1574,7 @@ export default function CoursePlanner() {
                           : "bg-gradient-to-r from-white/95 to-white/85 dark:from-neutral-800/80 dark:to-neutral-900/70 text-gray-700 dark:text-gray-200 hover:from-blue-50/90 hover:to-indigo-50/80 dark:hover:from-blue-950/40 dark:hover:to-indigo-950/30"
                         }
                         hover:scale-[1.02] active:scale-[0.98]`}
-                      onClick={() => {
-                        setCourseplannerSelectedYear(y.id);
-                        // Reset term selection when year changes
-                        if (y.terms?.[0]) {
-                          setCourseplannerSelectedTerm(y.terms[0].id);
-                        }
-                      }}
+                      onClick={() => handleYearSelect(y.id, y.terms)}
                     >
                       {y.label}
                     </Button>
@@ -1418,7 +1598,7 @@ export default function CoursePlanner() {
                           : "bg-gradient-to-r from-white/95 to-white/85 dark:from-neutral-800/80 dark:to-neutral-900/70 text-gray-700 dark:text-gray-200 hover:from-green-50/90 hover:to-emerald-50/80 dark:hover:from-green-950/40 dark:hover:to-emerald-950/30"
                         }
                         hover:scale-[1.02] active:scale-[0.98]`}
-                      onClick={() => setCourseplannerSelectedTerm(t.id)}
+                      onClick={() => handleTermSelect(t.id)}
                     >
                       {t.name}
                     </Button>

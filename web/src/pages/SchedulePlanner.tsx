@@ -971,7 +971,7 @@ export default function SchedulePlanner() {
   return (
     <div className="min-h-screen w-full" style={bgStyle}>
       <style>{scrollbarStyles}</style>
-      <div className="max-w-[1400px] mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-[1400px] mx-auto px-3 py-6 space-y-6">
         {/* Top header: title on the left, school year chip on the right */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex flex-col gap-3">
