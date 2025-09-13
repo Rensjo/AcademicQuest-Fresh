@@ -25,11 +25,11 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      # Adjust if your web lives in ./web and your root scripts differ
+      # Build web application using root package.json scripts
       - name: Build web (prod)
         run: |
           npm ci
-          npm run build
+          npm run build:web
 
       - name: Build Tauri DMG (ad-hoc)
         uses: tauri-apps/tauri-action@v0
