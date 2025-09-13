@@ -44,11 +44,20 @@ jobs:
         with:
           args: --target ${{ matrix.target }}
 
+      - name: List build outputs
+        run: |
+          echo "=== Build output structure ==="
+          find src-tauri/target -name "*.dmg" -o -name "*.app" -o -name "*.tar.gz" | head -20
+          echo "=== Bundle directory contents ==="
+          ls -la src-tauri/target/${{ matrix.target }}/release/bundle/ || echo "Bundle directory not found"
+          echo "=== All target directories ==="
+          ls -la src-tauri/target/ || echo "Target directory not found"
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: mac-${{ matrix.target }}
           path: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
-            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.tar.gz
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.app
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.tar.gz
