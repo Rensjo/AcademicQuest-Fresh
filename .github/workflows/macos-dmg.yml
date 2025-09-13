@@ -52,12 +52,14 @@ jobs:
           ls -la src-tauri/target/${{ matrix.target }}/release/bundle/ || echo "Bundle directory not found"
           echo "=== All target directories ==="
           ls -la src-tauri/target/ || echo "Target directory not found"
+          echo "=== Release directory contents ==="
+          ls -la src-tauri/target/${{ matrix.target }}/release/ || echo "Release directory not found"
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: mac-${{ matrix.target }}
           path: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.dmg
-            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.app
-            src-tauri/target/${{ matrix.target }}/release/bundle/**/*.tar.gz
+            src-tauri/target/${{ matrix.target }}/release/bundle/**/*
+            src-tauri/target/${{ matrix.target }}/release/*.app
+            src-tauri/target/${{ matrix.target }}/release/*.dmg
