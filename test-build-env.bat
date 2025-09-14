@@ -1,7 +1,7 @@
 @echo off
 REM Test script to verify build environment matches CI/CD setup (Windows)
 
-echo 🔧 AcademicQuest-Fresh Build Environment Test (Windows)
+echo 🔧 AcademicQuest Build Environment Test (Windows)
 echo ====================================================
 
 set "errors=0"

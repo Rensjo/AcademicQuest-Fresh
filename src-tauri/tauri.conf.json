@@ -1,7 +1,7 @@
 {
-  "productName": "AcademicQuest-Fresh",
-  "version": "0.0.1",
-  "identifier": "com.renkaistudio.academicquest.fresh",
+  "productName": "AcademicQuest",
+  "version": "4.2.0",
+  "identifier": "com.renkaistudios.academicquest",
   "build": {
     "frontendDist": "../web/dist",
     "devUrl": "http://localhost:5173",
@@ -10,7 +10,7 @@
   "app": {
     "windows": [
       {
-        "title": "AcademicQuest Fresh",
+        "title": "AcademicQuest",
         "width": 1280,
         "height": 800,
         "resizable": true
@@ -31,11 +31,11 @@
       "icons/icon.icns", 
       "icons/AcademicQuest-Icon.ico"
     ],
-    "publisher": "Renkai Studio",
-    "copyright": "Copyright © 2024 Renkai Studio. All rights reserved.",
+    "publisher": "RenKaiStudios",
+    "copyright": "Copyright © 2024 RenKaiStudios. All rights reserved.",
     "category": "Education",
     "shortDescription": "Academic planning and course management application",
-    "longDescription": "AcademicQuest Fresh is a comprehensive academic planning and course management application designed to help students organize their academic journey, track courses, manage assignments, and plan their educational path effectively.",
+    "longDescription": "AcademicQuest is a comprehensive academic planning and course management application designed to help students organize their academic journey, track courses, manage assignments, and plan their educational path effectively.",
     "windows": {
       "wix": {
         "language": ["en-US"]

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Test script to verify build environment matches CI/CD setup
 
-echo "🔧 AcademicQuest-Fresh Build Environment Test"
+echo "🔧 AcademicQuest Build Environment Test"
 echo "=============================================="
 
 # Color codes for output

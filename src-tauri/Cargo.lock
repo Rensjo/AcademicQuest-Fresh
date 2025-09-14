@@ -3,8 +3,8 @@
 version = 4
 
 [[package]]
-name = "academicquest-fresh"
-version = "0.0.1"
+name = "academicquest"
+version = "4.2.0"
 dependencies = [
  "serde",
  "serde_json",

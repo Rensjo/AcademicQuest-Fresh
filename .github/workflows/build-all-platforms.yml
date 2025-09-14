@@ -91,14 +91,15 @@ jobs:
       if: matrix.platform == 'windows'
       run: |
         $env:PATH += ";$env:USERPROFILE\.cargo\bin"
-        npm run tauri build -- --target ${{ matrix.target }}
+        cargo tauri build --target ${{ matrix.target }}
       shell: pwsh
         
     - name: Build installer (Unix)
       if: matrix.platform != 'windows'
       run: |
         export PATH="$HOME/.cargo/bin:$PATH"
-        npm run tauri build -- --target ${{ matrix.target }}
+        chmod +x "$HOME/.cargo/bin/tauri" || true
+        cargo tauri build --target ${{ matrix.target }}
         
     - name: List build outputs
       run: |

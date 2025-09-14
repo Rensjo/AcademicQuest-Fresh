@@ -59,13 +59,20 @@ jobs:
     - name: List build outputs
       run: |
         echo "=== Build output structure ==="
-        find src-tauri/target -name "*.msi" -o -name "*.exe" -o -name "*.zip" | head -20
+        Get-ChildItem -Recurse -Path "src-tauri/target" -Include "*.msi", "*.exe", "*.zip" -ErrorAction SilentlyContinue | Select-Object -First 20 | ForEach-Object { $_.FullName }
         echo "=== Bundle directory contents ==="
-        ls -la src-tauri/target/${{ matrix.target }}/release/bundle/ || echo "Bundle directory not found"
-        echo "=== All target directories ==="
-        ls -la src-tauri/target/ || echo "Target directory not found"
+        if (Test-Path "src-tauri/target/${{ matrix.target }}/release/bundle/") {
+            Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release/bundle/" -Recurse | Format-Table Name, Length, LastWriteTime
+        } else {
+            echo "Bundle directory not found"
+        }
         echo "=== Release directory contents ==="
-        ls -la src-tauri/target/${{ matrix.target }}/release/ || echo "Release directory not found"
+        if (Test-Path "src-tauri/target/${{ matrix.target }}/release/") {
+            Get-ChildItem -Path "src-tauri/target/${{ matrix.target }}/release/" | Format-Table Name, Length, LastWriteTime
+        } else {
+            echo "Release directory not found"
+        }
+      shell: pwsh
         
     - name: Upload artifacts
       uses: actions/upload-artifact@v4

@@ -1,7 +1,7 @@
 @echo off
-REM Setup script for AcademicQuest-Fresh development environment on Windows
+REM Setup script for AcademicQuest development environment on Windows
 
-echo Setting up AcademicQuest-Fresh development environment...
+echo Setting up AcademicQuest development environment...
 
 REM Check if Rust is installed
 cargo --version >nul 2>&1

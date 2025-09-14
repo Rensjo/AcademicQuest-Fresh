@@ -1,8 +1,8 @@
-# AcademicQuest Fresh
+# AcademicQuest
 
 A modern, gamified academic planning and productivity application built with Tauri and React. Transform your academic journey with intelligent course planning, task management, and achievement tracking.
 
-![AcademicQuest Fresh](https://img.shields.io/badge/version-0.0.1-blue)
+![AcademicQuest](https://img.shields.io/badge/version-4.2.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -102,7 +102,7 @@ For comprehensive installation instructions, see [INSTALLATION.md](INSTALLATION.
 
 ### Project Structure
 ```
-AcademicQuest-Fresh/
+AcademicQuest/
 ├── web/                    # React frontend
 │   ├── src/
 │   │   ├── components/     # Reusable UI components
@@ -143,7 +143,7 @@ AcademicQuest-Fresh/
 ## 🎨 Customization
 
 ### Themes
-AcademicQuest Fresh supports both light and dark themes with automatic system detection.
+AcademicQuest supports both light and dark themes with automatic system detection.
 
 ### Icons
 Custom application icons are included for all platforms:
@@ -225,4 +225,4 @@ See [CHANGELOG.md](CHANGELOG.md) for version history and updates.
 
 **Made with ❤️ for students by students**
 
-*Transform your academic journey with AcademicQuest Fresh!*
+*Transform your academic journey with AcademicQuest!*

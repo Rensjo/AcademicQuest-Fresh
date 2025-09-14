@@ -1,8 +1,8 @@
 [package]
-name = "academicquest-fresh"
-version = "0.0.1"
-description = "AcademicQuest Fresh - A modern academic planning application"
-authors = ["you"]
+name = "academicquest"
+version = "4.2.0"
+description = "AcademicQuest - A modern academic planning application"
+authors = ["RenKaiStudios"]
 license = ""
 repository = ""
 edition = "2021"

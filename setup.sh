@@ -1,7 +1,7 @@
 #!/bin/bash
-# Setup script for AcademicQuest-Fresh development environment
+# Setup script for AcademicQuest development environment
 
-echo "Setting up AcademicQuest-Fresh development environment..."
+echo "Setting up AcademicQuest development environment..."
 
 # Check if Rust is installed
 if ! command -v cargo &> /dev/null; then

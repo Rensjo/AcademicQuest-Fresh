@@ -44,6 +44,7 @@ jobs:
         cargo install tauri-cli --version ^2.0
         echo "Tauri CLI installed, checking version..."
         export PATH="$HOME/.cargo/bin:$PATH"
+        chmod +x "$HOME/.cargo/bin/tauri" || true
         cargo tauri --version
       
     - name: Install frontend dependencies
@@ -59,7 +60,8 @@ jobs:
     - name: Build Linux installer
       run: |
         export PATH="$HOME/.cargo/bin:$PATH"
-        npm run tauri build -- --target ${{ matrix.target }}
+        chmod +x "$HOME/.cargo/bin/tauri" || true
+        cargo tauri build --target ${{ matrix.target }}
         
     - name: List build outputs
       run: |
